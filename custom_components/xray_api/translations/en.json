@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Xray API",
+        "description": "Enter an Xray gRPC endpoint reachable over a trusted LAN or VPN.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "balancer_tags": "Balancer tags"
+        }
+      }
+    },
+    "error": {
+      "already_configured": "This host and port are already configured.",
+      "host_required": "Enter a host.",
+      "invalid_port": "Enter a TCP port from 1 to 65535.",
+      "timeout": "The Xray API did not respond before the deadline.",
+      "cannot_connect": "Could not connect to the Xray API endpoint.",
+      "unimplemented": "The Xray build does not implement a required API service or method.",
+      "unknown": "The Xray API validation failed. Check the endpoint and service configuration."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Xray API options",
+        "data": {
+          "balancer_tags": "Balancer tags"
+        }
+      }
+    },
+    "error": {
+      "unimplemented": "The Xray build does not implement the Routing service or method."
+    }
+  }
+}

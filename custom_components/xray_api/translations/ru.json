@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Подключение к Xray API",
+        "description": "Укажите gRPC endpoint Xray в доверенной LAN или VPN.",
+        "data": {
+          "host": "Хост",
+          "port": "Порт",
+          "balancer_tags": "Теги балансировщиков"
+        }
+      }
+    },
+    "error": {
+      "already_configured": "Этот хост и порт уже настроены.",
+      "host_required": "Укажите хост.",
+      "invalid_port": "Укажите TCP-порт от 1 до 65535.",
+      "timeout": "Xray API не ответил до истечения тайм-аута.",
+      "cannot_connect": "Не удалось подключиться к endpoint Xray API.",
+      "unimplemented": "Сборка Xray не поддерживает требуемый сервис или метод API.",
+      "unknown": "Проверка Xray API завершилась ошибкой. Проверьте endpoint и сервисы."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Настройки Xray API",
+        "data": {
+          "balancer_tags": "Теги балансировщиков"
+        }
+      }
+    },
+    "error": {
+      "unimplemented": "Сборка Xray не поддерживает сервис или метод Routing."
+    }
+  }
+}
