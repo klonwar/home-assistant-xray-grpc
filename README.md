@@ -44,6 +44,14 @@ Observatory, Stats, and Routing are polled concurrently every approximately 15 s
 
 This integration is intentionally UI-agnostic. It does not provide dashboards, Bubble Card popups, notifications, automations, route tracing, balancer enumeration, log ingestion, SSH/SFTP, shell commands, config-file reads, or control/mutating Xray RPCs. Inspect Xray and Xkeen logs manually for deeper diagnosis.
 
+## Release automation
+
+Release Please manages versions for the `beta` and `main` branches. Use Conventional Commit prefixes such as `fix:` for patch releases, `feat:` for minor releases, and a `!` suffix for breaking changes. Do not edit the integration version manually in ordinary feature or fix PRs.
+
+Create feature PRs against `beta` first. After a feature PR is merged, the beta workflow opens or updates a Release Please PR. Merging it publishes a GitHub prerelease in the `vX.Y.Z-beta.N` format and updates `manifest.json` and `CHANGELOG.md`. When the beta is accepted, open and merge a regular PR from `beta` into `main`; the stable workflow then opens a Release Please PR that promotes the beta line to a stable `vX.Y.Z` release. After each stable release, merge `main` back into `beta` before starting the next beta cycle so both branches share the released version baseline.
+
+The workflows require the repository Actions secret `RELEASE_PLEASE_TOKEN`, a fine-grained token with repository-scoped `contents`, `issues`, and pull-request write permissions. Review the CI status before merging each Release Please PR. HACS users must enable pre-release updates to receive beta versions.
+
 ## Development
 
 The checked-in command stubs mirror Xray-core v26.7.28 (commit `5ca6f4b7d4dc20a881d4330e498892697627ec0c`). The integration uses the `grpcio` and `protobuf` runtimes supplied by supported Home Assistant releases; it does not ask Home Assistant to install conflicting global versions. Run from the repository root:
