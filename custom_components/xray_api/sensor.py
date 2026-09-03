@@ -26,6 +26,7 @@ except ImportError:  # pragma: no cover
         pass
 
     class SensorDeviceClass:
+        DATA_SIZE = "data_size"
         DURATION = "duration"
         TIMESTAMP = "timestamp"
 
@@ -129,6 +130,7 @@ class OutboundTrafficSensor(XraySensor):
         label = "uplink" if direction == "uplink" else "downlink"
         super().__init__(coordinator, entry, kind, tag=tag, name=f"{tag} {label}")
         self.direction = direction
+        self._attr_device_class = SensorDeviceClass.DATA_SIZE
         self._attr_native_unit_of_measurement = "B"
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
 

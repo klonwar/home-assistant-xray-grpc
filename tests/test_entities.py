@@ -23,6 +23,17 @@ def test_unique_id_encodes_original_tag_without_collisions() -> None:
     assert first.startswith("xray_api_entry_outbound_alive_")
 
 
+def test_outbound_traffic_sensor_uses_data_size_metadata_and_raw_bytes() -> None:
+    coordinator = XrayCoordinator(api=SimpleNamespace())
+    sensor = OutboundTrafficSensor(
+        coordinator, SimpleNamespace(entry_id="entry"), "vm9", "uplink"
+    )
+
+    assert sensor._attr_device_class == "data_size"
+    assert sensor._attr_native_unit_of_measurement == "B"
+    assert sensor._attr_state_class == "total_increasing"
+
+
 def test_balancer_entity_becomes_unavailable_after_options_tag_removed() -> None:
     api = SimpleNamespace(
         async_get_observatory=lambda: asyncio.sleep(0, result={}),
