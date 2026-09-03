@@ -46,7 +46,7 @@ This integration is intentionally UI-agnostic. It does not provide dashboards, B
 
 ## Development
 
-The checked-in command stubs mirror Xray-core v26.7.28 (commit `5ca6f4b7d4dc20a881d4330e498892697627ec0c`) and require `grpcio>=1.83.1` plus `protobuf>=4.25.0`. Run from the repository root:
+The checked-in command stubs mirror Xray-core v26.7.28 (commit `5ca6f4b7d4dc20a881d4330e498892697627ec0c`). The integration uses the `grpcio` and `protobuf` runtimes supplied by supported Home Assistant releases; it does not ask Home Assistant to install conflicting global versions. Run from the repository root:
 
 ```bash
 python -m compileall -q custom_components/xray_api
