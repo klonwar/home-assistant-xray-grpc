@@ -5,7 +5,7 @@ import warnings
 
 from . import command_pb2 as app_dot_router_dot_command_dot_command__pb2
 
-GRPC_GENERATED_VERSION = '1.83.1'
+GRPC_GENERATED_VERSION = '1.78.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
