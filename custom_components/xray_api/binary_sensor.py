@@ -69,7 +69,7 @@ class _DynamicOutboundAlive:
         self.unsub = coordinator.async_add_listener(self._update)
 
     def _update(self):
-        new_tags = set(self.coordinator.known_outbound_tags) - self.seen
+        new_tags = set(self.coordinator.configured_outbound_tags) - self.seen
         if new_tags:
             self.seen.update(new_tags)
             self.add_entities([
@@ -87,10 +87,10 @@ async def async_setup_entry(hass: Any, entry: Any, async_add_entities: Callable)
     coordinator: XrayCoordinator = hass.data["xray_api"][entry.entry_id]
     entities: list[Any] = [ApiAvailableBinarySensor(coordinator, entry)]
     manager = _DynamicOutboundAlive(coordinator, entry, async_add_entities)
-    manager.seen.update(coordinator.known_outbound_tags)
+    manager.seen.update(coordinator.configured_outbound_tags)
     entities.extend(
         OutboundAliveBinarySensor(coordinator, entry, tag)
-        for tag in sorted(coordinator.known_outbound_tags)
+        for tag in sorted(coordinator.configured_outbound_tags)
     )
     managers = getattr(coordinator, "_entity_managers", [])
     managers.append(manager)

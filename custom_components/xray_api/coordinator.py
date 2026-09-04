@@ -119,6 +119,7 @@ class XrayCoordinator(DataUpdateCoordinator):
         now_fn: Callable[[], datetime] | None = None,
         hass: Any | None = None,
         known_outbound_tags: tuple[str, ...] | list[str] = (),
+        monitored_outbound_tags: tuple[str, ...] | list[str] | None = None,
         on_outbound_tags: Callable[[tuple[str, ...]], None] | None = None,
     ) -> None:
         super().__init__(
@@ -133,6 +134,10 @@ class XrayCoordinator(DataUpdateCoordinator):
         self.api = api or GrpcXrayApi(host, self.port)
         self._now_fn = now_fn or (lambda: datetime.now(timezone.utc))
         self._known_outbound_tags = {str(tag) for tag in known_outbound_tags if str(tag)}
+        self._monitor_all_outbounds = monitored_outbound_tags is None
+        self._monitored_outbound_tags = {
+            str(tag) for tag in (monitored_outbound_tags or ()) if str(tag)
+        }
         self._on_outbound_tags = on_outbound_tags
         self._generation = 0
         self._last_snapshot = XraySnapshot()
@@ -146,6 +151,32 @@ class XrayCoordinator(DataUpdateCoordinator):
     def known_outbound_tags(self) -> frozenset[str]:
         """Return all tags seen in Observatory, including retained tags."""
         return frozenset(self._known_outbound_tags)
+
+    @property
+    def monitor_all_outbounds(self) -> bool:
+        """Return whether this entry uses the pre-selection legacy behavior."""
+        return self._monitor_all_outbounds
+
+    @property
+    def monitored_outbound_tags(self) -> frozenset[str]:
+        """Return explicitly monitored tags, or an empty set in legacy mode."""
+        return frozenset(self._monitored_outbound_tags)
+
+    @property
+    def configured_outbound_tags(self) -> frozenset[str]:
+        """Return tags for which outbound entities should exist."""
+        if self._monitor_all_outbounds:
+            return self.known_outbound_tags
+        return frozenset(self._monitored_outbound_tags)
+
+    def set_monitored_outbound_tags(
+        self, tags: tuple[str, ...] | list[str] | None
+    ) -> None:
+        """Apply an options selection; ``None`` retains legacy monitor-all mode."""
+        self._monitor_all_outbounds = tags is None
+        self._monitored_outbound_tags = {
+            str(tag) for tag in (tags or ()) if str(tag)
+        }
 
     @property
     def overall_status(self) -> str:
@@ -220,8 +251,26 @@ class XrayCoordinator(DataUpdateCoordinator):
                 self._known_outbound_tags = new_known_tags
                 if self._on_outbound_tags is not None:
                     self._on_outbound_tags(tuple(sorted(new_known_tags)))
-        observed = frozenset(observatory_result) if observatory_ok else frozenset()
+        observed = (
+            frozenset(
+                tag
+                for tag in observatory_result
+                if self._monitor_all_outbounds or tag in self._monitored_outbound_tags
+            )
+            if observatory_ok
+            else frozenset()
+        )
         stats = stats_result if stats_ok else previous.stats
+        if stats_ok and isinstance(stats_result, StatsSnapshot) and not self._monitor_all_outbounds:
+            stats = StatsSnapshot(
+                uptime_seconds=stats_result.uptime_seconds,
+                counters={
+                    key: value
+                    for key, value in stats_result.counters.items()
+                    if self._counter_tag(key) in self._monitored_outbound_tags
+                },
+                reset=stats_result.reset,
+            )
         reset_counters = set(previous.reset_counters)
         if stats_ok and isinstance(stats_result, StatsSnapshot):
             previous_counters = previous.stats.counters if previous.stats is not None else {}
@@ -303,7 +352,11 @@ class XrayCoordinator(DataUpdateCoordinator):
 
     def outbound_available(self, tag: str) -> bool:
         snapshot = self.snapshot
-        return snapshot.observatory.available and tag in snapshot.observed_outbound_tags
+        return (
+            tag in self.configured_outbound_tags
+            and snapshot.observatory.available
+            and tag in snapshot.observed_outbound_tags
+        )
 
     def traffic_available(self) -> bool:
         return self.snapshot.stats_status.available and self.snapshot.stats is not None
@@ -319,9 +372,18 @@ class XrayCoordinator(DataUpdateCoordinator):
         )
 
     def counter(self, tag: str, direction: str) -> int | None:
+        if tag not in self.configured_outbound_tags:
+            return None
         if not self.traffic_available() or self.snapshot.stats is None:
             return None
         key = f"outbound>>>{tag}>>>traffic>>>{direction}"
         if key in self.snapshot.reset_counters:
             return None
         return self.snapshot.stats.counters.get(key)
+
+    @staticmethod
+    def _counter_tag(key: str) -> str:
+        prefix = "outbound>>>"
+        if not key.startswith(prefix):
+            return ""
+        return key[len(prefix) :].split(">>>", 1)[0]

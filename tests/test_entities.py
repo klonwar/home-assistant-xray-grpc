@@ -108,6 +108,55 @@ def test_dynamic_outbound_sensors_restore_persisted_tags_before_first_snapshot()
     assert all(entity.available is False for entity in added)
 
 
+def test_dynamic_outbound_sensors_only_create_explicitly_monitored_tags() -> None:
+    coordinator = XrayCoordinator(
+        api=SimpleNamespace(),
+        known_outbound_tags=("vm9", "direct"),
+        monitored_outbound_tags=("vm9",),
+    )
+    added = []
+    manager = _DynamicOutboundSensors(coordinator, SimpleNamespace(entry_id="entry"), added.extend)
+
+    manager._update()
+
+    assert len(added) == 3
+    assert {entity.tag for entity in added} == {"vm9"}
+
+
+def test_explicitly_unselected_outbound_entities_become_unavailable() -> None:
+    coordinator = XrayCoordinator(
+        api=SimpleNamespace(),
+        monitored_outbound_tags=("vm9",),
+    )
+    coordinator.data = coordinator._last_snapshot = coordinator._last_snapshot.__class__(
+        outbounds={"vm9": OutboundStatus("vm9", True, 10, "", None, None, None, None, None)},
+        observed_outbound_tags=frozenset({"vm9"}),
+        api_available=True,
+        last_successful_update=datetime.now(timezone.utc),
+        routing=coordinator._last_snapshot.routing.__class__(True),
+        observatory=coordinator._last_snapshot.observatory.__class__(True),
+        stats_status=coordinator._last_snapshot.stats_status.__class__(True),
+    )
+    entity = OutboundTrafficSensor(coordinator, SimpleNamespace(entry_id="entry"), "vm9", "uplink")
+
+    assert entity.available is False
+    coordinator.data = coordinator._last_snapshot = coordinator._last_snapshot.__class__(
+        outbounds={"vm9": OutboundStatus("vm9", True, 10, "", None, None, None, None, None)},
+        observed_outbound_tags=frozenset({"vm9"}),
+        stats=StatsSnapshot(1, {"outbound>>>vm9>>>traffic>>>uplink": 4}),
+        api_available=True,
+        last_successful_update=datetime.now(timezone.utc),
+        routing=coordinator._last_snapshot.routing.__class__(True),
+        observatory=coordinator._last_snapshot.observatory.__class__(True),
+        stats_status=coordinator._last_snapshot.stats_status.__class__(True),
+    )
+    assert entity.available is True
+
+    coordinator.set_monitored_outbound_tags(())
+
+    assert entity.available is False
+
+
 def test_api_available_entity_is_visible_before_first_successful_snapshot() -> None:
     coordinator = XrayCoordinator(api=SimpleNamespace())
 

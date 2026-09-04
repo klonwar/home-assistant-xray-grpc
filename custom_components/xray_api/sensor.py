@@ -204,7 +204,7 @@ class _DynamicOutboundSensors:
         self.unsub = coordinator.async_add_listener(self._update)
 
     def _update(self):
-        new_tags = set(self.coordinator.known_outbound_tags) - self.seen
+        new_tags = set(self.coordinator.configured_outbound_tags) - self.seen
         if new_tags:
             self.seen.update(new_tags)
             self.add_entities([
@@ -271,10 +271,10 @@ async def async_setup_entry(hass: Any, entry: Any, async_add_entities: Callable)
         XrayLastUpdateSensor(coordinator, entry),
     ]
     manager = _DynamicOutboundSensors(coordinator, entry, async_add_entities)
-    manager.seen.update(coordinator.known_outbound_tags)
+    manager.seen.update(coordinator.configured_outbound_tags)
     entities.extend(
         entity
-        for tag in sorted(coordinator.known_outbound_tags)
+        for tag in sorted(coordinator.configured_outbound_tags)
         for entity in _outbound_sensors(coordinator, entry, tag)
     )
     balancer_manager = _DynamicBalancerSensors(coordinator, entry, async_add_entities)

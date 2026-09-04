@@ -28,6 +28,7 @@ from .api import XrayApiError
 from .const import (
     CONF_BALANCER_TAGS,
     CONF_HOST,
+    CONF_MONITORED_OUTBOUND_TAGS,
     CONF_OUTBOUND_TAGS,
     CONF_PORT,
     DEFAULT_PORT,
@@ -37,6 +38,19 @@ from .coordinator import UpdateFailed, XrayCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ("sensor", "binary_sensor")
+_MISSING = object()
+
+
+def _normalize_option_tags(value: Any) -> tuple[str, ...]:
+    """Normalize persisted option values without treating a string as characters."""
+    values = (value,) if isinstance(value, str) else (value or ())
+    tags: list[str] = []
+    for value_item in values:
+        for token in str(value_item).replace(",", "\n").splitlines():
+            token = token.strip()
+            if token and token not in tags:
+                tags.append(token)
+    return tuple(tags)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -46,10 +60,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data = hass.data.setdefault(DOMAIN, {})
     host = entry.data[CONF_HOST]
     port = int(entry.data.get(CONF_PORT, DEFAULT_PORT))
-    tags = entry.options.get(
+    tags = _normalize_option_tags(entry.options.get(
         CONF_BALANCER_TAGS,
         entry.data.get(CONF_BALANCER_TAGS, ()),
-    )
+    ))
+    monitored = entry.options.get(CONF_MONITORED_OUTBOUND_TAGS, _MISSING)
+    if monitored is _MISSING:
+        monitored = None
+    else:
+        monitored = _normalize_option_tags(monitored)
     known_outbound_tags = tuple(
         str(tag) for tag in entry.data.get(CONF_OUTBOUND_TAGS, ()) if str(tag)
     )
@@ -75,6 +94,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         balancer_tags=tags,
         hass=hass,
         known_outbound_tags=known_outbound_tags,
+        monitored_outbound_tags=monitored,
         on_outbound_tags=_persist_outbound_tags,
     )
     try:
@@ -120,20 +140,47 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Apply changed balancer tags without replacing the shared API channel."""
+    """Apply options changes and reload when the endpoint itself changed."""
     coordinator = getattr(hass, "data", {}).get(DOMAIN, {}).get(entry.entry_id)
     if coordinator is None:
         return
-    coordinator.balancer_tags = tuple(
-        dict.fromkeys(
-            str(tag)
-            for tag in entry.options.get(
-                CONF_BALANCER_TAGS,
-                entry.data.get(CONF_BALANCER_TAGS, ()),
+    coordinator_host = getattr(coordinator, "host", None)
+    coordinator_port = getattr(coordinator, "port", None)
+    try:
+        endpoint_changed = (
+            coordinator_host is not None
+            and coordinator_port is not None
+            and (
+                str(coordinator_host) != str(entry.data.get(CONF_HOST, ""))
+                or int(coordinator_port) != int(entry.data.get(CONF_PORT, DEFAULT_PORT))
             )
-            if str(tag)
+        )
+    except (TypeError, ValueError):
+        endpoint_changed = True
+    if endpoint_changed:
+        schedule = getattr(
+            getattr(hass, "config_entries", None), "async_schedule_reload", None
+        )
+        if schedule is not None:
+            schedule(entry.entry_id)
+        return
+    coordinator.balancer_tags = _normalize_option_tags(
+        entry.options.get(
+            CONF_BALANCER_TAGS,
+            entry.data.get(CONF_BALANCER_TAGS, ()),
         )
     )
+    monitored = entry.options.get(CONF_MONITORED_OUTBOUND_TAGS, _MISSING)
+    set_monitored = getattr(coordinator, "set_monitored_outbound_tags", None)
+    if set_monitored is not None:
+        set_monitored(None if monitored is _MISSING else _normalize_option_tags(monitored))
+    # Reconcile selected dynamic entities before refreshing. This ensures an
+    # offline options edit still creates the requested entities, which then
+    # remain unavailable until Observatory recovers.
+    for manager in getattr(coordinator, "_entity_managers", ()):
+        update = getattr(manager, "_update", None)
+        if update is not None:
+            update()
     try:
         await coordinator.async_refresh()
     except (
