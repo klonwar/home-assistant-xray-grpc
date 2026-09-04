@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/klonwar/home-assistant-xray-grpc/compare/v0.2.0...v0.3.0) (2026-09-04)
+
+
+### Features
+
+* bytes metrics ([59136d1](https://github.com/klonwar/home-assistant-xray-grpc/commit/59136d185f5e42c62c45b8e21bcd4e10d5370212))
+
+
+### Bug Fixes
+
+* bytes measure ([#8](https://github.com/klonwar/home-assistant-xray-grpc/issues/8)) ([59136d1](https://github.com/klonwar/home-assistant-xray-grpc/commit/59136d185f5e42c62c45b8e21bcd4e10d5370212))
+
 ## [0.2.0](https://github.com/klonwar/home-assistant-xray-grpc/compare/v0.2.0-beta...v0.2.0) (2026-09-03)
 
 
