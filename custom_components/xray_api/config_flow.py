@@ -213,7 +213,7 @@ try:
 
         @staticmethod
         def async_get_options_flow(config_entry):
-            return XrayApiOptionsFlow(config_entry)
+            return _new_options_flow(config_entry)
 except TypeError:  # pragma: no cover - legacy HA ConfigFlow base.
     class XrayApiConfigFlow(ConfigFlow):
         """Compatibility wrapper for legacy Home Assistant."""
@@ -225,24 +225,39 @@ except TypeError:  # pragma: no cover - legacy HA ConfigFlow base.
 
         @staticmethod
         def async_get_options_flow(config_entry):
-            return XrayApiOptionsFlow(config_entry)
+            return _new_options_flow(config_entry)
 
 
 class XrayApiOptionsFlow(OptionsFlow):
     """Edit the optional user-supplied balancer tags."""
 
-    def __init__(self, config_entry):
-        self.config_entry = config_entry
+    def __init__(self, config_entry: Any | None = None):
+        """Initialize the flow.
+
+        Recent Home Assistant releases provide ``config_entry`` as a
+        read-only property on ``OptionsFlow`` and populate it when the flow
+        is created.  Keep an explicit override only for the lightweight
+        compatibility/test path; never assign to the base-class property.
+        """
+        self._config_entry_override = config_entry
+
+    @property
+    def _entry(self):
+        """Return the config entry supplied by HA or by a compatibility caller."""
+        if self._config_entry_override is not None:
+            return self._config_entry_override
+        return self.config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
+        entry = self._entry
         if user_input is not None:
             tags = normalize_balancer_tags(user_input.get(CONF_BALANCER_TAGS))
             if tags:
                 try:
                     await validate_routing_support(
-                        self.config_entry.data.get(CONF_HOST, ""),
-                        int(self.config_entry.data.get(CONF_PORT, DEFAULT_PORT)),
+                        entry.data.get(CONF_HOST, ""),
+                        int(entry.data.get(CONF_PORT, DEFAULT_PORT)),
                         tags,
                     )
                 except XrayUnimplementedError:
@@ -262,9 +277,9 @@ class XrayApiOptionsFlow(OptionsFlow):
                     errors["base"] = flow_error(error)
             if not errors:
                 return self.async_create_entry(data={CONF_BALANCER_TAGS: tags})
-        current = self.config_entry.options.get(
+        current = entry.options.get(
             CONF_BALANCER_TAGS,
-            self.config_entry.data.get(CONF_BALANCER_TAGS, ()),
+            entry.data.get(CONF_BALANCER_TAGS, ()),
         )
         current_value = "\n".join(current) if not isinstance(current, str) else current
         schema = (
@@ -273,3 +288,13 @@ class XrayApiOptionsFlow(OptionsFlow):
             else {CONF_BALANCER_TAGS: str}
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
+
+
+def _new_options_flow(config_entry):
+    """Create an Options Flow without assigning HA's read-only entry property."""
+    flow = XrayApiOptionsFlow()
+    # Home Assistant now injects the entry into OptionsFlow and exposes it via
+    # a read-only property. Older runtimes and our pure-Python fallback do not.
+    if not hasattr(OptionsFlow, "config_entry"):
+        flow._config_entry_override = config_entry
+    return flow

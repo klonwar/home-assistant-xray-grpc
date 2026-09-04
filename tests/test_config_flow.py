@@ -10,6 +10,7 @@ from custom_components.xray_api.api import (
     XrayUnimplementedError,
 )
 from custom_components.xray_api.config_flow import (
+    XrayApiConfigFlow,
     XrayApiOptionsFlow,
     endpoint_key,
     flow_error,
@@ -57,6 +58,47 @@ def test_options_flow_rejects_routing_unimplemented(monkeypatch) -> None:
 
     assert result["type"] == "form"
     assert result["errors"]["base"] == "unimplemented"
+
+
+def test_options_flow_does_not_assign_read_only_config_entry(monkeypatch) -> None:
+    entry = SimpleNamespace(data={"host": "xray.local", "port": 10085}, options={})
+    readonly_entry = property(lambda _flow: entry)
+    monkeypatch.setattr(XrayApiOptionsFlow, "config_entry", readonly_entry, raising=False)
+
+    flow = XrayApiOptionsFlow(entry)
+
+    assert flow._entry is entry
+
+
+def test_options_flow_factory_keeps_entry_for_compatibility() -> None:
+    entry = SimpleNamespace(data={"host": "xray.local", "port": 10085}, options={})
+
+    flow = XrayApiConfigFlow.async_get_options_flow(entry)
+
+    assert flow._entry is entry
+
+
+def test_options_flow_factory_uses_home_assistant_entry_property(monkeypatch) -> None:
+    import custom_components.xray_api.config_flow as config_flow
+
+    entry = SimpleNamespace(data={"host": "xray.local", "port": 10085}, options={})
+    managed_base = type(
+        "ManagedOptionsFlow",
+        (),
+        {"config_entry": property(lambda _flow: entry)},
+    )
+    monkeypatch.setattr(config_flow, "OptionsFlow", managed_base)
+    monkeypatch.setattr(
+        XrayApiOptionsFlow,
+        "config_entry",
+        property(lambda _flow: entry),
+        raising=False,
+    )
+
+    flow = config_flow._new_options_flow(entry)
+
+    assert flow._config_entry_override is None
+    assert flow._entry is entry
 
 
 def test_options_flow_accepts_offline_routing_edit(monkeypatch) -> None:
