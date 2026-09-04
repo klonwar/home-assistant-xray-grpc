@@ -3,11 +3,27 @@
     "step": {
       "user": {
         "title": "Connect to Xray API",
-        "description": "Enter an Xray gRPC endpoint reachable over a trusted LAN or VPN.",
+        "description": "Enter an Xray gRPC endpoint reachable over a trusted LAN or VPN. The default host is 192.168.1.1 and the default port is 10085.",
         "data": {
           "host": "Host",
           "port": "Port",
           "balancer_tags": "Balancer tags"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Xray API endpoint",
+        "description": "Update the endpoint, then choose which discovered outbounds to monitor.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "balancer_tags": "Balancer tags"
+        }
+      },
+      "outbounds": {
+        "title": "Select outbounds to monitor",
+        "description": "Only selected outbounds get entities. Leave the list empty to monitor none.",
+        "data": {
+          "monitored_outbound_tags": "Outbounds"
         }
       }
     },
@@ -19,6 +35,9 @@
       "cannot_connect": "Could not connect to the Xray API endpoint.",
       "unimplemented": "The Xray build does not implement a required API service or method.",
       "unknown": "The Xray API validation failed. Check the endpoint and service configuration."
+    },
+    "abort": {
+      "reconfigure_successful": "Xray API endpoint reconfigured successfully."
     }
   },
   "options": {
@@ -26,7 +45,8 @@
       "init": {
         "title": "Xray API options",
         "data": {
-          "balancer_tags": "Balancer tags"
+          "balancer_tags": "Balancer tags",
+          "monitored_outbound_tags": "Outbounds to monitor"
         }
       }
     },

@@ -3,11 +3,27 @@
     "step": {
       "user": {
         "title": "Подключение к Xray API",
-        "description": "Укажите gRPC endpoint Xray в доверенной LAN или VPN.",
+        "description": "Укажите gRPC endpoint Xray в доверенной LAN или VPN. По умолчанию используются хост 192.168.1.1 и порт 10085.",
         "data": {
           "host": "Хост",
           "port": "Порт",
           "balancer_tags": "Теги балансировщиков"
+        }
+      },
+      "reconfigure": {
+        "title": "Изменение endpoint Xray API",
+        "description": "Измените endpoint, затем выберите outbounds для мониторинга.",
+        "data": {
+          "host": "Хост",
+          "port": "Порт",
+          "balancer_tags": "Теги балансировщиков"
+        }
+      },
+      "outbounds": {
+        "title": "Выбор outbounds для мониторинга",
+        "description": "Сущности создаются только для выбранных outbounds. Пустой список отключает мониторинг outbounds.",
+        "data": {
+          "monitored_outbound_tags": "Outbounds"
         }
       }
     },
@@ -19,6 +35,9 @@
       "cannot_connect": "Не удалось подключиться к endpoint Xray API.",
       "unimplemented": "Сборка Xray не поддерживает требуемый сервис или метод API.",
       "unknown": "Проверка Xray API завершилась ошибкой. Проверьте endpoint и сервисы."
+    },
+    "abort": {
+      "reconfigure_successful": "Endpoint Xray API успешно изменён."
     }
   },
   "options": {
@@ -26,7 +45,8 @@
       "init": {
         "title": "Настройки Xray API",
         "data": {
-          "balancer_tags": "Теги балансировщиков"
+          "balancer_tags": "Теги балансировщиков",
+          "monitored_outbound_tags": "Outbounds для мониторинга"
         }
       }
     },

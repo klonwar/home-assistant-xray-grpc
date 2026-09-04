@@ -8,6 +8,7 @@ DOMAIN = "xray_api"
 NAME = "Xray API"
 VERSION = "0.1.0"
 DEFAULT_PORT = 10085
+DEFAULT_HOST = "192.168.1.1"
 DEFAULT_SCAN_INTERVAL = timedelta(seconds=15)
 DEFAULT_RPC_TIMEOUT = 4.0
 CONFIG_FLOW_TIMEOUT = 5.0
@@ -15,6 +16,8 @@ CONFIG_FLOW_TIMEOUT = 5.0
 CONF_HOST = "host"
 CONF_PORT = "port"
 CONF_BALANCER_TAGS = "balancer_tags"
+# Explicit user selection of outbounds to monitor. Missing means legacy "all".
+CONF_MONITORED_OUTBOUND_TAGS = "monitored_outbound_tags"
 # Internal Config Entry data used to recreate dynamic entities after restart.
 CONF_OUTBOUND_TAGS = "outbound_tags"
 

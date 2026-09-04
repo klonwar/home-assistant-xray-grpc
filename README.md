@@ -8,7 +8,9 @@ In HACS, add this GitHub repository as a custom repository of type **Integration
 
 ## Configure
 
-Add **Xray API** through the Home Assistant UI. Enter the Xray API host, port (default `10085`), and optional balancer tags separated by commas or lines. Use placeholders such as `xray.example.lan`; installation-specific outbound and balancer names are not integration defaults. The flow validates Observatory and Stats, and validates Routing when balancer tags are configured. Tags can be edited later through the Options Flow; adding tags rechecks Routing, while an endpoint-down edit is saved and remains unavailable until the next successful refresh.
+Add **Xray API** through the Home Assistant UI. The first step accepts the Xray API host (default `192.168.1.1`), port (default `10085`), and optional balancer tags separated by commas or lines. After Observatory and Stats are validated, the next step lists the outbounds returned by Observatory; select only the outbounds that should get monitoring entities. An empty selection is valid and means that no outbound entities are created. Use placeholders such as `xray.example.lan`; installation-specific outbound and balancer names are not integration defaults.
+
+The same endpoint-and-selection wizard is available from **Reconfigure**. It updates the existing Config Entry in place, preserving its entry ID and stable entity IDs while reloading the integration. The gear **Options Flow** edits balancer tags and the outbound selection without changing the endpoint. Existing entries created before outbound selection was introduced keep the legacy monitor-all behavior until the selection is explicitly saved.
 
 The Xray API must expose these services:
 

@@ -162,9 +162,16 @@ An empty target means “no target selected” and is not itself a network error
 
 Fields:
 
-- `host`;
+- `host`, default `192.168.1.1`;
 - `port`, default `10085`;
 - optional balancer tags entered comma-separated or one per line.
+
+After validating Observatory and Stats, the flow displays the outbounds returned
+by Observatory and stores the user's explicit multi-selection; an empty
+selection means that no outbound entities are monitored. The same endpoint,
+discovery, and selection steps are used by Reconfigure, which updates the
+existing Config Entry in place. The native Options Flow edits only balancer
+tags and the outbound selection.
 
 Requirements:
 
@@ -173,7 +180,7 @@ Requirements:
 - require Routing only when balancer tags are configured;
 - prevent duplicate `host:port` entries;
 - provide actionable errors for timeout, refused connection, and `UNIMPLEMENTED`;
-- add an Options Flow so balancer tags can be edited later; when tags are added, recheck Routing support, but do not discard edits on timeout or endpoint connection failure.
+- add an Options Flow so balancer tags and outbound selection can be edited later; when tags are added, recheck Routing support, but do not discard edits on timeout or endpoint connection failure.
 
 Do not hardcode the user's outbound or balancer names as integration defaults. They may be used in tests and README examples only.
 

@@ -169,3 +169,44 @@ def test_successful_observatory_refresh_reports_tags_for_persistence() -> None:
 
     assert persisted == [("vm9",)]
     assert coordinator.known_outbound_tags == frozenset({"vm9"})
+
+
+def test_explicit_outbound_selection_filters_snapshot_and_status() -> None:
+    api = FakeApi()
+    api.observatory["direct"] = outbound("direct", alive=False)
+    api.stats = StatsSnapshot(
+        uptime_seconds=12,
+        counters={
+            "outbound>>>vm9>>>traffic>>>uplink": 100,
+            "outbound>>>direct>>>traffic>>>uplink": 200,
+        },
+    )
+    coordinator = XrayCoordinator(api=api, monitored_outbound_tags=("vm9",))
+
+    snapshot = refresh(coordinator)
+
+    assert snapshot.observed_outbound_tags == frozenset({"vm9"})
+    assert coordinator.configured_outbound_tags == frozenset({"vm9"})
+    assert coordinator.counter("direct", "uplink") is None
+    assert coordinator.overall_status == "online"
+
+
+def test_empty_outbound_selection_keeps_reachable_api_online() -> None:
+    coordinator = XrayCoordinator(api=FakeApi(), monitored_outbound_tags=())
+
+    refresh(coordinator)
+
+    assert coordinator.configured_outbound_tags == frozenset()
+    assert coordinator.snapshot.observed_outbound_tags == frozenset()
+    assert coordinator.overall_status == "online"
+
+
+def test_missing_selection_uses_legacy_monitor_all_behavior() -> None:
+    api = FakeApi()
+    api.observatory["direct"] = outbound("direct")
+    coordinator = XrayCoordinator(api=api)
+
+    refresh(coordinator)
+
+    assert coordinator.monitor_all_outbounds is True
+    assert coordinator.configured_outbound_tags == frozenset({"vm9", "direct"})
