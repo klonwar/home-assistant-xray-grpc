@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/klonwar/home-assistant-xray-grpc/compare/v0.3.0...v0.3.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* better beta releases without separate branch ([b3d7b8c](https://github.com/klonwar/home-assistant-xray-grpc/commit/b3d7b8cc6ff47d52b2e371297d1a7692e6c8d1ef))
+
 ## [0.3.0](https://github.com/klonwar/home-assistant-xray-grpc/compare/v0.2.0...v0.3.0) (2026-09-04)
 
 
