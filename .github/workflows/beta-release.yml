@@ -1,0 +1,176 @@
+name: "[Release] Beta"
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Branch or commit SHA to publish as a beta"
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: beta-release
+  cancel-in-progress: false
+
+jobs:
+  beta:
+    name: Publish beta release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require trusted workflow revision
+        shell: bash
+        env:
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          set -euo pipefail
+          expected="${GITHUB_REPOSITORY}/.github/workflows/beta-release.yml@refs/heads/main"
+          if [ "$WORKFLOW_REF" != "$expected" ]; then
+            echo "Run this workflow from the main branch; use source_ref for the beta source (got $WORKFLOW_REF)" >&2
+            exit 1
+          fi
+
+      - name: Check out source ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Get source SHA
+        id: source
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Read stable manifest version
+        id: manifest
+        shell: bash
+        run: |
+          version="$(jq -r '.version // empty' custom_components/xray_api/manifest.json)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "The source manifest must contain a stable SemVer version, got: $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate beta version
+        id: version
+        uses: ietf-tools/semver-action@v1.11.0
+        with:
+          token: ${{ github.token }}
+          branch: ${{ steps.source.outputs.sha }}
+          prefix: v
+          fromTag: ${{ steps.manifest.outputs.version }}
+          majorList: ""
+          minorList: feat
+          patchList: fix
+          noNewCommitBehavior: error
+          noVersionBumpBehavior: error
+
+      - name: Build beta tag
+        id: beta
+        shell: bash
+        env:
+          RUN_STARTED_AT: ${{ github.run_started_at }}
+        run: |
+          timestamp="$(date -u -d "$RUN_STARTED_AT" +%Y%m%d%H%M%S)"
+          echo "tag=v${{ steps.version.outputs.nextStrict }}-beta.${timestamp}.${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify existing beta tag or release
+        id: existing
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.beta.outputs.tag }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+
+          api_status() {
+            local endpoint="$1"
+            local headers status
+            headers="$(gh api "$endpoint" --include --silent 2>/dev/null || true)"
+            status="$(printf '%s\n' "$headers" | sed -n '1s/^HTTP\/[^ ]* \([0-9][0-9][0-9]\).*/\1/p')"
+            if [ -z "$status" ]; then
+              echo "Unable to determine GitHub API status for $endpoint" >&2
+              return 1
+            fi
+            printf '%s\n' "$status"
+          }
+
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+          tag_endpoint="repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG"
+          tag_status="$(api_status "$tag_endpoint")"
+          case "$tag_status" in
+            404)
+              tag_present=false
+              ;;
+            200)
+              tag_present=true
+              tag_info="$(gh api "$tag_endpoint" --jq '.object.type + " " + .object.sha')"
+              ;;
+            *)
+              echo "GitHub API returned HTTP $tag_status while checking tag $TAG" >&2
+              exit 1
+              ;;
+          esac
+
+          if [ "$tag_present" = true ]; then
+            tag_type="${tag_info%% *}"
+            tag_sha="${tag_info#* }"
+            if [ "$tag_type" = "tag" ]; then
+              tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_sha" --jq '.object.sha')"
+            fi
+            if [ "$tag_sha" != "$SOURCE_SHA" ]; then
+              echo "Existing tag $TAG points to $tag_sha, expected $SOURCE_SHA" >&2
+              exit 1
+            fi
+          fi
+
+          release_endpoint="repos/$GITHUB_REPOSITORY/releases/tags/$TAG"
+          release_status="$(api_status "$release_endpoint")"
+          case "$release_status" in
+            404)
+              release_present=false
+              ;;
+            200)
+              release_present=true
+              release_info="$(gh api "$release_endpoint" --jq '.tag_name + " " + (.prerelease | tostring)')"
+              ;;
+            *)
+              echo "GitHub API returned HTTP $release_status while checking release $TAG" >&2
+              exit 1
+              ;;
+          esac
+
+          if [ "$release_present" = true ]; then
+            if [ "$tag_present" != true ]; then
+              echo "Release $TAG exists but its tag ref is missing" >&2
+              exit 1
+            fi
+            release_tag="${release_info%% *}"
+            prerelease="${release_info#* }"
+            if [ "$release_tag" != "$TAG" ]; then
+              echo "Existing release has unexpected tag $release_tag, expected $TAG" >&2
+              exit 1
+            fi
+            if [ "$prerelease" != "true" ]; then
+              echo "Existing release $TAG is not a prerelease" >&2
+              exit 1
+            fi
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release $TAG already exists for $SOURCE_SHA; nothing to do"
+          fi
+
+      - name: Publish beta release
+        if: steps.existing.outputs.exists != 'true'
+        uses: ncipollo/release-action@v1.20.0
+        with:
+          tag: ${{ steps.beta.outputs.tag }}
+          commit: ${{ steps.source.outputs.sha }}
+          prerelease: true
+          generateReleaseNotes: true
+          token: ${{ github.token }}

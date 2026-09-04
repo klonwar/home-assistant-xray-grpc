@@ -55,7 +55,7 @@ def test_local_brand_icon_is_hacs_compatible() -> None:
 
 
 def test_release_please_manifest_tracks_integration_version() -> None:
-    """Keep Release Please's bootstrap version aligned with the integration."""
+    """Keep Release Please's stable bootstrap version aligned with the integration."""
     integration_manifest = json.loads(
         (INTEGRATION / "manifest.json").read_text(encoding="utf-8")
     )
@@ -67,27 +67,10 @@ def test_release_please_manifest_tracks_integration_version() -> None:
     )
 
     assert release_manifest["."] == integration_manifest["version"]
-    assert release_config["versioning"] == "prerelease"
-    assert release_config["prerelease-type"] == "beta"
-    assert release_config["prerelease"] is False
+    assert release_config["versioning"] == "default"
+    assert "prerelease-type" not in release_config
+    assert "prerelease" not in release_config
     package_config = release_config["packages"]["."]
-    assert package_config["changelog-path"] == "CHANGELOG.md"
-    assert {
-        extra_file["path"]: extra_file["jsonpath"]
-        for extra_file in package_config["extra-files"]
-    } == {"custom_components/xray_api/manifest.json": "$.version"}
-
-
-def test_beta_release_please_config_uses_prerelease_strategy() -> None:
-    """Keep the beta workflow isolated from the stable release strategy."""
-    beta_config = json.loads(
-        (ROOT / "release-please-config.beta.json").read_text(encoding="utf-8")
-    )
-
-    assert beta_config["versioning"] == "prerelease"
-    assert beta_config["prerelease-type"] == "beta"
-    assert beta_config["prerelease"] is True
-    package_config = beta_config["packages"]["."]
     assert package_config["changelog-path"] == "CHANGELOG.md"
     assert {
         extra_file["path"]: extra_file["jsonpath"]
@@ -101,10 +84,7 @@ def test_validation_skips_release_please_technical_branches() -> None:
         encoding="utf-8"
     )
 
-    for branch in (
-        "release-please--branches--main",
-        "release-please--branches--beta",
-    ):
+    for branch in ("release-please--branches--main",):
         assert workflow.count(f"github.ref_name == '{branch}'") == 2
         assert workflow.count(f"github.head_ref == '{branch}'") == 2
 
@@ -116,32 +96,57 @@ def test_validation_skips_release_please_technical_branches() -> None:
     assert workflow.count("${{ !(") == 2
 
 
-def test_validation_pushes_only_stable_and_beta_branches() -> None:
-    """Avoid validation runs for generated branches, feature branches, and tags."""
+def test_validation_pushes_only_stable_branch() -> None:
+    """Avoid validation runs for feature branches and tags."""
     workflow = (ROOT / ".github" / "workflows" / "validate.yml").read_text(
         encoding="utf-8"
     )
 
-    assert "  push:\n    branches:\n      - main\n      - beta\n" in workflow
+    assert "  push:\n    branches:\n      - main\n" in workflow
     assert "  pull_request:\n" in workflow
     assert "  schedule:\n" not in workflow
     assert "  workflow_dispatch:\n" in workflow
 
 
-def test_release_workflows_wire_each_branch_to_its_config() -> None:
-    """Keep Release Please triggers and inputs aligned with each release line."""
-    beta_workflow = (ROOT / ".github" / "workflows" / "release-please-beta.yml").read_text(
+def test_release_workflows_use_stable_release_please_and_manual_beta() -> None:
+    """Keep stable automation and manual beta publishing separate."""
+    beta_workflow = (ROOT / ".github" / "workflows" / "beta-release.yml").read_text(
         encoding="utf-8"
     )
     stable_workflow = (ROOT / ".github" / "workflows" / "release-please.yml").read_text(
         encoding="utf-8"
     )
 
-    assert "      - beta\n" in beta_workflow
-    assert "target-branch: beta" in beta_workflow
-    assert "config-file: release-please-config.beta.json" in beta_workflow
-    assert "manifest-file: .release-please-manifest.json" in beta_workflow
-    assert "secrets.RELEASE_PLEASE_TOKEN" in beta_workflow
+    assert "workflow_dispatch:" in beta_workflow
+    assert "source_ref:" in beta_workflow
+    assert "github.workflow_ref" in beta_workflow
+    assert "@refs/heads/main" in beta_workflow
+    assert "Run this workflow from the main branch" in beta_workflow
+    assert "persist-credentials: false" in beta_workflow
+    assert "uses: ietf-tools/semver-action@v1.11.0" in beta_workflow
+    assert "branch: ${{ steps.source.outputs.sha }}" in beta_workflow
+    assert "id: manifest" in beta_workflow
+    assert "jq -r '.version // empty'" in beta_workflow
+    assert "fromTag: ${{ steps.manifest.outputs.version }}" in beta_workflow
+    assert "minorList: feat" in beta_workflow
+    assert "patchList: fix" in beta_workflow
+    assert "github.run_started_at" in beta_workflow
+    assert "date -u -d" in beta_workflow
+    assert "uses: ncipollo/release-action@v1.20.0" in beta_workflow
+    assert (
+        "tag: ${{ steps.beta.outputs.tag }}"
+        in beta_workflow
+    )
+    assert "commit: ${{ steps.source.outputs.sha }}" in beta_workflow
+    assert "prerelease: true" in beta_workflow
+    assert "id: existing" in beta_workflow
+    assert ".prerelease" in beta_workflow
+    assert "Existing tag" in beta_workflow
+    assert "api_status()" in beta_workflow
+    assert "--include --silent" in beta_workflow
+    assert "GitHub API returned HTTP" in beta_workflow
+    assert "Release $TAG exists but its tag ref is missing" in beta_workflow
+    assert "CHANGELOG.md" not in beta_workflow
 
     assert "      - main\n" in stable_workflow
     assert "target-branch: main" in stable_workflow

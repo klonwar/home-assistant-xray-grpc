@@ -46,11 +46,13 @@ This integration is intentionally UI-agnostic. It does not provide dashboards, B
 
 ## Release automation
 
-Release Please manages versions for the `beta` and `main` branches. Use Conventional Commit prefixes such as `fix:` for patch releases, `feat:` for minor releases, and a `!` suffix for breaking changes. Do not edit the integration version manually in ordinary feature or fix PRs.
+Release Please manages stable versions on `main` only. Use Conventional Commit prefixes such as `fix:` for patch releases, `feat:` for minor releases, and a `!` suffix (or `BREAKING CHANGE:` footer) for breaking changes. Do not edit the integration version manually in ordinary feature or fix PRs.
 
-Create feature PRs against `beta` first. After a feature PR is merged, the beta workflow opens or updates a Release Please PR. Merging it publishes a GitHub prerelease in the `vX.Y.Z-beta.N` format and updates `manifest.json` and `CHANGELOG.md`. When the beta is accepted, open and merge a regular PR from `beta` into `main`; the stable workflow then opens a Release Please PR that promotes the beta line to a stable `vX.Y.Z` release. After each stable release, merge `main` back into `beta` before starting the next beta cycle so both branches share the released version baseline.
+Beta releases are manual and do not create commits. In the Actions tab, select the `main` branch as the workflow revision, run `[Release] Beta`, and enter the feature branch or commit SHA in `source_ref`. The workflow rejects a workflow revision from any other branch. It uses `ietf-tools/semver-action` to calculate the next SemVer line, appends a UTC timestamp plus the unique GitHub run ID (for example `-beta.20260904123045.21920458098`), and uses `ncipollo/release-action` to create a GitHub prerelease on the exact source SHA. It does not change `manifest.json`, `CHANGELOG.md`, or any branch. Because a beta is intentionally published without a version-changing commit, the checked-out manifest keeps the stable version while HACS displays the prerelease version from the GitHub release tag. HACS users must enable pre-release updates to receive beta versions.
 
-The workflows require the repository Actions secret `RELEASE_PLEASE_TOKEN`, a fine-grained token with repository-scoped `contents`, `issues`, and pull-request write permissions. Review the CI status before merging each Release Please PR. HACS users must enable pre-release updates to receive beta versions.
+For predictable beta versioning, release-impacting commits must use `feat:`, `fix:`, or a breaking marker (`!` or `BREAKING CHANGE:`). Other commit types do not start a beta release. After this migration is merged, delete the obsolete `beta` branch; keep its historical tags.
+
+After testing, merge the feature branch into `main` (prefer squash merge), and let the stable Release Please workflow open and publish the regular `vX.Y.Z` release. The workflows require the repository Actions secret `RELEASE_PLEASE_TOKEN` for stable releases, a fine-grained token with repository-scoped `contents`, `issues`, and pull-request write permissions. Review CI before merging each stable Release Please PR.
 
 ## Development
 
