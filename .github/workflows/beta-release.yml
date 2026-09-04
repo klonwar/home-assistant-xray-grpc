@@ -77,7 +77,8 @@ jobs:
           RUN_STARTED_AT: ${{ github.run_started_at }}
         run: |
           timestamp="$(date -u -d "$RUN_STARTED_AT" +%Y%m%d%H%M%S)"
-          echo "tag=v${{ steps.version.outputs.nextStrict }}-beta.${timestamp}.${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+          # semver-action includes the configured prefix in nextStrict.
+          echo "tag=${{ steps.version.outputs.nextStrict }}-beta.${timestamp}.${{ github.run_id }}" >> "$GITHUB_OUTPUT"
 
       - name: Verify existing beta tag or release
         id: existing

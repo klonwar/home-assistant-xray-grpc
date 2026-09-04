@@ -132,6 +132,8 @@ def test_release_workflows_use_stable_release_please_and_manual_beta() -> None:
     assert "patchList: fix" in beta_workflow
     assert "github.run_started_at" in beta_workflow
     assert "date -u -d" in beta_workflow
+    assert "tag=${{ steps.version.outputs.nextStrict }}-beta." in beta_workflow
+    assert 'tag=v${{ steps.version.outputs.nextStrict }}-beta.' not in beta_workflow
     assert "uses: ncipollo/release-action@v1.20.0" in beta_workflow
     assert (
         "tag: ${{ steps.beta.outputs.tag }}"
