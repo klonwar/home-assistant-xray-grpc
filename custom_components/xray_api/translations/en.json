@@ -51,7 +51,10 @@
       }
     },
     "error": {
-      "unimplemented": "The Xray build does not implement the Routing service or method."
+      "unimplemented": "The Xray build does not implement the Routing service or method.",
+      "timeout": "The current outbound list could not be refreshed before the deadline. The last known list is shown.",
+      "cannot_connect": "The current outbound list could not be refreshed. The last known list is shown.",
+      "unknown": "The current outbound list could not be refreshed. The last known list is shown."
     }
   }
 }

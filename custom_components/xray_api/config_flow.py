@@ -128,9 +128,42 @@ async def discover_endpoint(
                 asyncio.gather(*(api.async_get_balancer(tag, timeout) for tag in tags)),
                 timeout=timeout,
             )
-        if isinstance(observatory, Mapping):
-            return tuple(str(tag) for tag in observatory if str(tag))
+        return _outbound_tags_from_result(observatory)
+    finally:
+        close = getattr(api, "async_close", None)
+        if close is not None:
+            result = close()
+            if hasattr(result, "__await__"):
+                await result
+
+
+def _outbound_tags_from_result(observatory: Any) -> tuple[str, ...]:
+    """Extract current outbound tags from an Observatory result."""
+    if not isinstance(observatory, Mapping):
         return ()
+    return tuple(str(tag) for tag in observatory if str(tag))
+
+
+async def discover_outbounds(
+    host: str,
+    port: int,
+    *,
+    api_factory: Any = GrpcXrayApi,
+    timeout: float = CONFIG_FLOW_TIMEOUT,
+) -> tuple[str, ...]:
+    """Fetch the current outbound-tag set for the Options Flow.
+
+    This intentionally calls Observatory only. Stats and Routing are validated
+    when the endpoint or balancer settings are submitted; opening the options
+    dialog must refresh the outbound selector without requiring either group.
+    """
+    api = api_factory(host, port)
+    try:
+        observatory = await asyncio.wait_for(
+            api.async_get_observatory(timeout),
+            timeout=timeout,
+        )
+        return _outbound_tags_from_result(observatory)
     finally:
         close = getattr(api, "async_close", None)
         if close is not None:
@@ -443,6 +476,34 @@ class XrayApiOptionsFlow(OptionsFlow):
             return self._config_entry_override
         return self.config_entry
 
+    async def _async_current_outbounds(
+        self, entry: Any, fallback: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        """Read current outbounds, reusing the loaded coordinator channel when possible."""
+        hass = getattr(self, "hass", None)
+        coordinator = (
+            getattr(hass, "data", {}).get(DOMAIN, {}).get(entry.entry_id)
+            if hass is not None
+            else None
+        )
+        api = getattr(coordinator, "api", None)
+        get_observatory = getattr(api, "async_get_observatory", None)
+        if callable(get_observatory):
+            observatory = await asyncio.wait_for(
+                get_observatory(CONFIG_FLOW_TIMEOUT),
+                timeout=CONFIG_FLOW_TIMEOUT,
+            )
+            return _outbound_tags_from_result(observatory)
+        if hass is not None:
+            return await discover_outbounds(
+                str(entry.data.get(CONF_HOST, "")),
+                int(entry.data.get(CONF_PORT, DEFAULT_PORT)),
+                timeout=CONFIG_FLOW_TIMEOUT,
+            )
+        # Compatibility callers without an HA runtime cannot perform I/O. Keep
+        # their existing persisted choices available for offline edits.
+        return fallback
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
         entry = self._entry
@@ -455,8 +516,30 @@ class XrayApiOptionsFlow(OptionsFlow):
             CONF_MONITORED_OUTBOUND_TAGS,
             known,
         )
-        selected = normalize_balancer_tags(current_value)
-        available = tuple(dict.fromkeys((*known, *selected)))
+        configured = normalize_balancer_tags(current_value)
+        fallback_available = tuple(dict.fromkeys((*known, *configured)))
+        if not hasattr(self, "_available_outbounds"):
+            if user_input is None and getattr(self, "hass", None) is not None:
+                try:
+                    available = await self._async_current_outbounds(
+                        entry,
+                        fallback_available,
+                    )
+                except Exception as error:  # Keep Options Flow usable while offline.
+                    available = fallback_available
+                    errors["base"] = flow_error(error)
+            else:
+                available = fallback_available
+            self._available_outbounds = tuple(dict.fromkeys(available))
+        else:
+            available = self._available_outbounds
+        options = getattr(entry, "options", {}) or {}
+        if CONF_MONITORED_OUTBOUND_TAGS in options:
+            selected = tuple(tag for tag in configured if tag in available)
+        else:
+            # Legacy entries without an explicit selection monitor every
+            # currently discovered outbound, including newly added tags.
+            selected = tuple(available)
         if user_input is not None:
             tags = normalize_balancer_tags(user_input.get(CONF_BALANCER_TAGS))
             chosen = tuple(

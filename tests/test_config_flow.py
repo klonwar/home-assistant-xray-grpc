@@ -394,6 +394,111 @@ def test_options_flow_persists_selected_outbounds() -> None:
     }
 
 
+def test_options_flow_refreshes_outbounds_from_observatory(monkeypatch) -> None:
+    calls: list[tuple[str, int]] = []
+    rendered: dict[str, tuple[str, ...]] = {}
+
+    async def discover(host, port, **kwargs):
+        calls.append((host, port))
+        return ("new", "shared")
+
+    monkeypatch.setattr(
+        "custom_components.xray_api.config_flow.discover_outbounds", discover
+    )
+
+    def capture_schema(options, selected):
+        rendered["options"] = tuple(options)
+        rendered["selected"] = tuple(selected)
+        return {}
+
+    monkeypatch.setattr(
+        "custom_components.xray_api.config_flow._outbound_schema", capture_schema
+    )
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        data={
+            "host": "xray.local",
+            "port": 10085,
+            "outbound_tags": ["old", "shared"],
+        },
+        options={"monitored_outbound_tags": ()},
+    )
+    flow = XrayApiOptionsFlow(entry)
+    # A real HA Options Flow has ``hass`` injected; this enables the same
+    # fresh-discovery path in the pure-Python test harness.
+    flow.hass = SimpleNamespace(data={})
+
+    form = asyncio.run(flow.async_step_init())
+
+    assert form["type"] == "form"
+    assert calls == [("xray.local", 10085)]
+    assert flow._available_outbounds == ("new", "shared")
+    assert rendered == {"options": ("new", "shared"), "selected": ()}
+
+    result = asyncio.run(
+        flow.async_step_init(
+            {
+                "balancer_tags": "",
+                "monitored_outbound_tags": ["old", "new"],
+            }
+        )
+    )
+
+    assert result["data"]["monitored_outbound_tags"] == ("new",)
+
+
+def test_options_flow_refreshes_through_loaded_coordinator_api(monkeypatch) -> None:
+    calls: list[float] = []
+
+    class Api:
+        async def async_get_observatory(self, timeout):
+            calls.append(timeout)
+            return {"new": object()}
+
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        data={"host": "xray.local", "port": 10085, "outbound_tags": ["old"]},
+        options={"monitored_outbound_tags": ()},
+    )
+    coordinator = SimpleNamespace(api=Api())
+    flow = XrayApiOptionsFlow(entry)
+    flow.hass = SimpleNamespace(data={"xray_api": {"entry-1": coordinator}})
+
+    async def unexpected_standalone(*args, **kwargs):
+        raise AssertionError("the loaded coordinator channel should be reused")
+
+    monkeypatch.setattr(
+        "custom_components.xray_api.config_flow.discover_outbounds",
+        unexpected_standalone,
+    )
+
+    asyncio.run(flow.async_step_init())
+
+    assert calls == [5.0]
+    assert flow._available_outbounds == ("new",)
+
+
+def test_options_flow_falls_back_to_known_outbounds_when_refresh_fails(monkeypatch) -> None:
+    async def discover(*args, **kwargs):
+        raise XrayConnectionError()
+
+    monkeypatch.setattr(
+        "custom_components.xray_api.config_flow.discover_outbounds", discover
+    )
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        data={"host": "xray.local", "port": 10085, "outbound_tags": ["old"]},
+        options={"monitored_outbound_tags": ()},
+    )
+    flow = XrayApiOptionsFlow(entry)
+    flow.hass = SimpleNamespace(data={})
+
+    form = asyncio.run(flow.async_step_init())
+
+    assert form["errors"] == {"base": "cannot_connect"}
+    assert flow._available_outbounds == ("old",)
+
+
 def test_options_update_keeps_persisted_tags_when_refresh_is_unavailable() -> None:
     class Coordinator:
         balancer_tags = ()
